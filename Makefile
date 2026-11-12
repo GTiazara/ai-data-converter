@@ -27,3 +27,7 @@ run:
 	poetry run $(APP) $(ARGS)
 
 check: lint test
+
+# local development commands
+run-dev:
+	poetry run ia-convert --config conf/conf.yaml

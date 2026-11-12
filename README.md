@@ -34,6 +34,9 @@ poetry run ia-convert INPUT.csv --to feather [-o OUTPUT] [options]
 | `-o, --output PATH` | input path with the format extension | Output file                                       |
 | `--sep CHAR`        | `,`                                  | CSV field separator                               |
 | `--encoding NAME`   | `utf-8`                              | CSV file encoding (e.g. `latin-1`)                |
+| `--columns NAME ...`| all columns                          | Include named columns in the specified order      |
+| `--add-id`          | off                                  | Add a sequential 0-based integer `id` column      |
+| `--no-add-id`       | —                                    | Disable ID generation from YAML config           |
 | `--compression C`   | `lz4`                                | Feather compression: `lz4`, `zstd`, `uncompressed`|
 | `--overwrite`       | off                                  | Replace an existing output file                   |
 | `--config FILE`     | —                                    | YAML file providing default values for the options|
@@ -44,6 +47,8 @@ Examples:
 poetry run ia-convert data/train.csv --to feather                  # writes data/train.feather
 poetry run ia-convert data/train.csv --to feather -o out/train.feather --compression zstd
 poetry run ia-convert data/eu.csv --to feather --sep ";" --encoding latin-1
+poetry run ia-convert data/train.csv --to feather --columns id label
+poetry run ia-convert data/train.csv --to feather --add-id
 poetry run ia-convert --config conf/example.yaml
 poetry run ia-convert --config conf/conf.yaml
 make run ARGS="--config conf/example.yaml"
@@ -67,12 +72,45 @@ See [conf/README.md](conf/README.md), [conf/example.yaml](conf/example.yaml), an
 environment. Command-line arguments override values from the configuration file; relative paths
 in the file are resolved against the file's directory.
 
+To select columns in your YAML file, add:
+
+```yaml
+columns: [id, label]
+```
+
+The output contains only those columns, in the specified order. Omit `columns` to include all
+columns; unknown names cause an error. `--columns` overrides the YAML selection.
+
+To map string categories to numeric values, configure a mapping for that column:
+
+```yaml
+value_mappings:
+  y:
+    "no": 0
+    "yes": 1
+```
+
+All non-null values in a mapped column must have an entry; otherwise conversion fails and no
+partial output is written. Null values remain null. Quote string keys in YAML.
+
+Set `add_id: true` in YAML or pass `--add-id` to prepend a sequential integer `id` column,
+starting at 0. Conversion fails if an `id` column is already included in the output. Use
+`--no-add-id` to disable ID generation from a config file.
+
 ### Python API
 
 ```python
 from ia_data_format_converter import available_formats, convert
 
 convert("data/train.csv", "data/train.feather", "feather", compression="zstd")
+convert("data/train.csv", "data/selected.feather", "feather", columns=["id", "label"])
+convert("data/train.csv", "data/with_id.feather", "feather", add_id=True)
+convert(
+  "data/train.csv",
+  "data/mapped.feather",
+  "feather",
+  value_mappings={"y": {"no": 0, "yes": 1}},
+)
 ```
 
 ## Adding an output format

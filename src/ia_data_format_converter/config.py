@@ -14,6 +14,10 @@ _SCHEMA: dict[str, type] = {
     "encoding": str,
     "compression": str,
     "overwrite": bool,
+    "columns": list,
+    "trim_whitespace": bool,
+    "value_mappings": dict,
+    "add_id": bool,
 }
 _PATH_KEYS = ("input", "output")
 
@@ -38,7 +42,9 @@ def load_config(path: str | Path) -> dict[str, Any]:
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise ConfigError(f"Configuration file {path} must contain a mapping of settings")
+        raise ConfigError(
+            f"Configuration file {path} must contain a mapping of settings"
+        )
 
     config: dict[str, Any] = {}
     for key, value in data.items():
@@ -52,6 +58,36 @@ def load_config(path: str | Path) -> dict[str, Any]:
                 f"Invalid value for setting {key!r}: expected {expected.__name__}, "
                 f"got {type(value).__name__}"
             )
+        if key == "columns" and (
+            not value
+            or any(not isinstance(column, str) or not column for column in value)
+        ):
+            raise ConfigError(
+                "Invalid value for setting 'columns': expected non-empty names"
+            )
+        if key == "value_mappings":
+            if not value:
+                raise ConfigError(
+                    "Invalid value for setting 'value_mappings': must not be empty"
+                )
+            for column, mapping in value.items():
+                if (
+                    not isinstance(column, str)
+                    or not column
+                    or not isinstance(mapping, dict)
+                    or not mapping
+                ):
+                    raise ConfigError(
+                        "Invalid value for setting 'value_mappings': expected column names "
+                        "mapped to non-empty mappings"
+                    )
+                for source, target in mapping.items():
+                    if isinstance(source, dict | list) or isinstance(
+                        target, dict | list
+                    ):
+                        raise ConfigError(
+                            f"Invalid mapping for column {column!r}: values must be scalars"
+                        )
         if key in _PATH_KEYS:
             value = str((path.parent / value).resolve())
         config[key] = value

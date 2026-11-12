@@ -39,7 +39,10 @@ def test_overwrite_allowed(sample_csv: Path, tmp_path: Path):
     output = tmp_path / "out.feather"
     output.write_bytes(b"original")
 
-    assert main([str(sample_csv), "--to", "feather", "-o", str(output), "--overwrite"]) == 0
+    assert (
+        main([str(sample_csv), "--to", "feather", "-o", str(output), "--overwrite"])
+        == 0
+    )
     assert feather.read_table(output).num_rows == 3
 
 
@@ -118,3 +121,89 @@ def test_invalid_config(sample_csv: Path, tmp_path: Path, capsys):
 
     assert main([str(sample_csv), "--to", "feather", "--config", str(conf)]) != 0
     assert "compresion" in capsys.readouterr().err
+
+
+def test_columns_from_config_and_cli_override(sample_csv: Path, tmp_path: Path):
+    conf = tmp_path / "c.yaml"
+    conf.write_text("to: feather\ncolumns: [score, id]\n")
+    output = tmp_path / "out.feather"
+
+    assert main([str(sample_csv), "--config", str(conf), "-o", str(output)]) == 0
+    assert feather.read_table(output).column_names == ["score", "id"]
+
+    assert (
+        main(
+            [
+                str(sample_csv),
+                "--config",
+                str(conf),
+                "-o",
+                str(output),
+                "--overwrite",
+                "--columns",
+                "label",
+                "id",
+            ]
+        )
+        == 0
+    )
+    assert feather.read_table(output).column_names == ["label", "id"]
+
+
+def test_missing_column_reports_error(sample_csv: Path, tmp_path: Path, capsys):
+    output = tmp_path / "out.feather"
+    assert (
+        main(
+            [
+                str(sample_csv),
+                "--to",
+                "feather",
+                "-o",
+                str(output),
+                "--columns",
+                "missing",
+            ]
+        )
+        != 0
+    )
+    assert "missing" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_value_mappings_from_config(sample_csv: Path, tmp_path: Path):
+    conf = tmp_path / "c.yaml"
+    conf.write_text(
+        'to: feather\nvalue_mappings:\n  label:\n    "cat": 0\n    "dog": 1\n    "bird": 2\n'
+    )
+    output = tmp_path / "mapped.feather"
+
+    assert main([str(sample_csv), "--config", str(conf), "-o", str(output)]) == 0
+
+    result = feather.read_table(output)
+    assert result.column("label").to_pylist() == [0, 1, 2]
+    assert str(result.column("label").type) == "int64"
+
+
+def test_add_id_from_config_and_cli_override(sample_csv: Path, tmp_path: Path):
+    conf = tmp_path / "c.yaml"
+    conf.write_text("to: feather\ncolumns: [label, score]\nadd_id: true\n")
+    output = tmp_path / "with-id.feather"
+
+    assert main([str(sample_csv), "--config", str(conf), "-o", str(output)]) == 0
+    assert feather.read_table(output).column_names == ["id", "label", "score"]
+
+    assert (
+        main(
+            [
+                str(sample_csv),
+                "--config",
+                str(conf),
+                "-o",
+                str(output),
+                "--overwrite",
+                "--no-add-id",
+            ]
+        )
+        == 0
+    )
+    assert feather.read_table(output).column_names == ["label", "score"]

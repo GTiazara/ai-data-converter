@@ -14,7 +14,12 @@ from ia_data_format_converter.readers import read_csv
 
 
 def test_errors_share_base_class():
-    for exc in (InputFileError, InvalidOptionError, OutputExistsError, UnknownFormatError):
+    for exc in (
+        InputFileError,
+        InvalidOptionError,
+        OutputExistsError,
+        UnknownFormatError,
+    ):
         assert issubclass(exc, ConversionError)
 
 
@@ -37,6 +42,20 @@ def test_semicolon_separator(tmp_path: Path):
 
     assert table.column_names == ["a", "b"]
     assert table.column("b").to_pylist() == ["x", "y"]
+
+
+def test_trim_whitespace_around_quoted_fields(tmp_path: Path):
+    path = tmp_path / "padded.csv"
+    path.write_text('age; "job"   ; "duration"\n58; "management"  ; 261\n', encoding="utf-8")
+
+    table = read_csv(path, sep=";", trim_whitespace=True)
+
+    assert table.column_names == ["age", "job", "duration"]
+    assert table.to_pydict() == {
+        "age": [58],
+        "job": ["management"],
+        "duration": [261],
+    }
 
 
 def test_latin1_encoding(tmp_path: Path):
