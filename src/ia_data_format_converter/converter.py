@@ -8,6 +8,11 @@ from typing import Any
 
 import pyarrow as pa
 
+from ia_data_format_converter.automap import (
+    auto_map,
+    report_format,
+    write_mapping_report,
+)
 from ia_data_format_converter.errors import InvalidOptionError, OutputExistsError
 from ia_data_format_converter.readers import read_csv
 from ia_data_format_converter.writers import get_writer
@@ -30,11 +35,15 @@ def convert(
     trim_whitespace: bool = False,
     value_mappings: Mapping[str, Mapping[Any, Any]] | None = None,
     add_id: bool = False,
+    auto_mappings: Sequence[Mapping[str, Any]] | None = None,
+    mapping_report: str | Path | None = None,
     **options: Any,
 ) -> Path:
     """Convert a CSV file to ``fmt`` and return the written output path.
 
     The output is written atomically: on failure no partial file is left behind.
+    When ``mapping_report`` is set, the applied mappings are summarised in that file
+    (``.md``, ``.yaml``/``.yml`` or ``.json``).
     """
     writer = get_writer(fmt)
     options = writer.validate_options(**options)
@@ -47,6 +56,14 @@ def convert(
         raise OutputExistsError(
             f"Output file already exists: {output} (use overwrite to replace)"
         )
+    if mapping_report is not None:
+        mapping_report = Path(mapping_report)
+        report_format(mapping_report)
+        if mapping_report.exists() and not overwrite:
+            raise OutputExistsError(
+                f"Mapping report already exists: {mapping_report} (use overwrite to replace)"
+            )
+    report: dict[str, dict[str, Any]] = {}
 
     table = read_csv(
         input_path, sep=sep, encoding=encoding, trim_whitespace=trim_whitespace
@@ -120,6 +137,15 @@ def convert(
             table = table.set_column(
                 table.column_names.index(column), column, mapped_array
             )
+            report[column] = {
+                "name": "value_mappings",
+                "strategy": "manual",
+                "mapping": dict(mapping),
+            }
+
+    if auto_mappings is not None:
+        table, auto_report = auto_map(table, auto_mappings, exclude=list(report))
+        report.update(auto_report)
 
     if not isinstance(add_id, bool):
         raise InvalidOptionError("add_id must be a boolean")
@@ -143,4 +169,6 @@ def convert(
         os.replace(tmp_path, output)
     finally:
         tmp_path.unlink(missing_ok=True)
+    if mapping_report is not None:
+        write_mapping_report(report, mapping_report)
     return output

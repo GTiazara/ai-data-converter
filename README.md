@@ -37,6 +37,8 @@ poetry run ia-convert INPUT.csv --to feather [-o OUTPUT] [options]
 | `--columns NAME ...`| all columns                          | Include named columns in the specified order      |
 | `--add-id`          | off                                  | Add a sequential 0-based integer `id` column      |
 | `--no-add-id`       | —                                    | Disable ID generation from YAML config           |
+| `--auto-map S`      | off                                  | Encode all unmapped string columns: `ordinal`, `onehot` |
+| `--mapping-report P`| —                                    | Write mapping summary (`.md`, `.yaml`, `.yml`, `.json`) |
 | `--compression C`   | `lz4`                                | Feather compression: `lz4`, `zstd`, `uncompressed`|
 | `--overwrite`       | off                                  | Replace an existing output file                   |
 | `--config FILE`     | —                                    | YAML file providing default values for the options|
@@ -49,6 +51,7 @@ poetry run ia-convert data/train.csv --to feather -o out/train.feather --compres
 poetry run ia-convert data/eu.csv --to feather --sep ";" --encoding latin-1
 poetry run ia-convert data/train.csv --to feather --columns id label
 poetry run ia-convert data/train.csv --to feather --add-id
+poetry run ia-convert data/train.csv --to feather --auto-map onehot --mapping-report data/mapping.md
 poetry run ia-convert --config conf/example.yaml
 poetry run ia-convert --config conf/conf.yaml
 make run ARGS="--config conf/example.yaml"
@@ -93,6 +96,21 @@ value_mappings:
 All non-null values in a mapped column must have an entry; otherwise conversion fails and no
 partial output is written. Null values remain null. Quote string keys in YAML.
 
+To encode categorical columns automatically, list one or more strategies (like scikit-learn
+`ColumnTransformer` entries) and optionally write a report of every applied mapping:
+
+```yaml
+auto_mappings:
+  - name: categorical
+    strategy: onehot          # one int8 column per category: job_admin., job_blue-collar, ...
+    columns: [job, marital]
+  - strategy: ordinal         # no 'columns': every remaining string column -> int64 codes
+mapping_report: ../data/output/mapping.yaml   # or .md / .json
+```
+
+Categories are sorted before encoding. Columns from `value_mappings` are reported as `manual`
+and skipped by automatic specs. See [conf/README.md](conf/README.md) for details.
+
 Set `add_id: true` in YAML or pass `--add-id` to prepend a sequential integer `id` column,
 starting at 0. Conversion fails if an `id` column is already included in the output. Use
 `--no-add-id` to disable ID generation from a config file.
@@ -110,6 +128,16 @@ convert(
   "data/mapped.feather",
   "feather",
   value_mappings={"y": {"no": 0, "yes": 1}},
+)
+convert(
+  "data/train.csv",
+  "data/encoded.feather",
+  "feather",
+  auto_mappings=[
+    {"name": "categorical", "strategy": "onehot", "columns": ["job"]},
+    {"strategy": "ordinal"},
+  ],
+  mapping_report="data/mapping.json",
 )
 ```
 

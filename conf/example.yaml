@@ -9,3 +9,21 @@ sep: ","
 encoding: utf-8
 compression: lz4
 overwrite: false
+
+# columns: ["duration", "y"]
+# add_id: true
+# value_mappings:
+#   y:
+#     "no": 0
+#     "yes": 1
+
+# Encode categorical columns automatically (strategies: ordinal, onehot).
+# A spec without 'columns' targets every remaining string column.
+auto_mappings:
+  - name: categorical
+    strategy: onehot
+    columns: [job, marital]
+  - name: remaining
+    strategy: ordinal
+# Summary of applied mappings; format follows the extension (.md, .yaml, .yml, .json).
+mapping_report: ../data/train-mapping.yaml

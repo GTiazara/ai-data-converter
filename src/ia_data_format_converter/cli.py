@@ -5,6 +5,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any
 
+from ia_data_format_converter.automap import STRATEGIES
 from ia_data_format_converter.config import ConfigError, load_config
 from ia_data_format_converter.converter import convert
 from ia_data_format_converter.errors import ConversionError
@@ -22,6 +23,8 @@ _DEFAULTS: dict[str, Any] = {
     "trim_whitespace": False,
     "value_mappings": None,
     "add_id": False,
+    "auto_mappings": None,
+    "mapping_report": None,
 }
 
 
@@ -58,6 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     id_group.add_argument("--no-add-id", dest="add_id", action="store_false")
     parser.set_defaults(add_id=None)
     parser.add_argument(
+        "--auto-map",
+        choices=list(STRATEGIES),
+        help="encode every string column not in value mappings with this strategy",
+    )
+    parser.add_argument(
+        "--mapping-report",
+        metavar="PATH",
+        help="write a summary of applied mappings (.md, .yaml, .yml or .json)",
+    )
+    parser.add_argument(
         "--compression",
         help="output compression (feather: lz4 [default], zstd, uncompressed)",
     )
@@ -84,9 +97,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"ia-convert: error: {exc}", file=sys.stderr)
         return 1
+    auto_map = vars(args).pop("auto_map")
     settings.update(
         {k: v for k, v in vars(args).items() if k != "config" and v is not None}
     )
+    if auto_map is not None:
+        settings["auto_mappings"] = [{"strategy": auto_map}]
 
     if not settings["input"]:
         parser.error("an input CSV file is required (argument or 'input' in --config)")
@@ -108,6 +124,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             trim_whitespace=settings["trim_whitespace"],
             value_mappings=settings["value_mappings"],
             add_id=settings["add_id"],
+            auto_mappings=settings["auto_mappings"],
+            mapping_report=settings["mapping_report"],
             **options,
         )
     except (ConversionError, OSError) as exc:
@@ -115,4 +133,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     print(f"Wrote {output}")
+    if settings["mapping_report"]:
+        print(f"Wrote {settings['mapping_report']}")
     return 0

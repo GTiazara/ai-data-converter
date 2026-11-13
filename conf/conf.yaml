@@ -3,16 +3,28 @@
 # Command-line arguments override every value below.
 
 input: /home/GTiazara/Documents/workspace/get_experience_project/IA_DATA_FORMAT_CONVERTER/data/input/bank-full.csv
-output: /home/GTiazara/Documents/workspace/get_experience_project/IA_DATA_FORMAT_CONVERTER/data/output/bank-full-duration.feather
+output: /home/GTiazara/Documents/workspace/get_experience_project/IA_DATA_FORMAT_CONVERTER/data/output/bank-full-ordinal.feather
 to: feather
 sep: ";"
 encoding: utf-8
 trim_whitespace: true
 compression: lz4
-overwrite: false
-columns: ["duration", "y"]
+overwrite: true
+# columns: [job, marital, y]
 add_id: true
-value_mappings:
-  y:
-    "no": 0
-    "yes": 1
+# value_mappings:
+#   y:
+#     "no": 0
+#     "yes": 1
+
+auto_mappings:
+  - name: categorical
+    strategy: ordinal #onehot
+  #   columns: [job, marital]
+  # - name: remaining
+  #   strategy: ordinal
+# Summary of applied mappings; format follows the extension (.md, .yaml, .yml, .json).
+mapping_report: ../data/train-mapping.yaml
+
+
+

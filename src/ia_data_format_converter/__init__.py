@@ -1,5 +1,6 @@
 """Convert tabular CSV data into binary formats for ML/AI workloads."""
 
+from ia_data_format_converter.automap import auto_map, write_mapping_report
 from ia_data_format_converter.converter import convert, default_output_path
 from ia_data_format_converter.errors import (
     ConversionError,
@@ -17,8 +18,10 @@ __all__ = [
     "InvalidOptionError",
     "OutputExistsError",
     "UnknownFormatError",
+    "auto_map",
     "available_formats",
     "convert",
     "default_output_path",
     "read_csv",
+    "write_mapping_report",
 ]

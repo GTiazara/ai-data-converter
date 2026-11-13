@@ -18,8 +18,10 @@ _SCHEMA: dict[str, type] = {
     "trim_whitespace": bool,
     "value_mappings": dict,
     "add_id": bool,
+    "auto_mappings": list,
+    "mapping_report": str,
 }
-_PATH_KEYS = ("input", "output")
+_PATH_KEYS = ("input", "output", "mapping_report")
 
 
 class ConfigError(Exception):
@@ -88,6 +90,13 @@ def load_config(path: str | Path) -> dict[str, Any]:
                         raise ConfigError(
                             f"Invalid mapping for column {column!r}: values must be scalars"
                         )
+        if key == "auto_mappings" and (
+            not value or any(not isinstance(spec, dict) for spec in value)
+        ):
+            raise ConfigError(
+                "Invalid value for setting 'auto_mappings': expected a non-empty list of "
+                "mappings with 'strategy' and optional 'name' and 'columns'"
+            )
         if key in _PATH_KEYS:
             value = str((path.parent / value).resolve())
         config[key] = value
