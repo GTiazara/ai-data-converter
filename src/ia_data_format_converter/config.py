@@ -20,6 +20,7 @@ _SCHEMA: dict[str, type] = {
     "add_id": bool,
     "auto_mappings": list,
     "mapping_report": str,
+    "source": dict,
 }
 _PATH_KEYS = ("input", "output", "mapping_report")
 
@@ -97,7 +98,19 @@ def load_config(path: str | Path) -> dict[str, Any]:
                 "Invalid value for setting 'auto_mappings': expected a non-empty list of "
                 "mappings with 'strategy' and optional 'name' and 'columns'"
             )
+        if key == "source" and (
+            set(value) != {"type", "name"}
+            or not all(isinstance(item, str) and item for item in value.values())
+        ):
+            raise ConfigError(
+                "Invalid value for setting 'source': expected a mapping with non-empty "
+                "'type' and 'name' strings only"
+            )
         if key in _PATH_KEYS:
             value = str((path.parent / value).resolve())
         config[key] = value
+    if "input" in config and "source" in config:
+        raise ConfigError(
+            "Settings 'input' and 'source' are exclusive: provide only one of them"
+        )
     return config

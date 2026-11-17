@@ -9,10 +9,12 @@ from ia_data_format_converter.automap import STRATEGIES
 from ia_data_format_converter.config import ConfigError, load_config
 from ia_data_format_converter.converter import convert
 from ia_data_format_converter.errors import ConversionError
+from ia_data_format_converter.sources import available_sources
 from ia_data_format_converter.writers import available_formats
 
 _DEFAULTS: dict[str, Any] = {
     "input": None,
+    "source": None,
     "output": None,
     "to": None,
     "sep": ",",
@@ -28,15 +30,33 @@ _DEFAULTS: dict[str, Any] = {
 }
 
 
+def _parse_source(value: str) -> dict[str, str]:
+    source_type, _, name = value.partition(":")
+    if not source_type or not name:
+        raise argparse.ArgumentTypeError(
+            f"invalid source {value!r}: expected TYPE:NAME (e.g. sklearn:iris)"
+        )
+    return {"type": source_type, "name": name}
+
+
 def build_parser() -> argparse.ArgumentParser:
     formats = available_formats()
     parser = argparse.ArgumentParser(
         prog="ia-convert",
-        description="Convert a tabular CSV file into a binary data format.",
-        epilog=f"Available output formats: {', '.join(formats)}",
+        description="Convert a tabular CSV file or a data source into another data format.",
+        epilog=(
+            f"Available output formats: {', '.join(formats)}. "
+            f"Available source types: {', '.join(available_sources())}."
+        ),
     )
     # Defaults are None so that values from --config are only overridden when given explicitly.
     parser.add_argument("input", nargs="?", help="input CSV file (header row required)")
+    parser.add_argument(
+        "--source",
+        type=_parse_source,
+        metavar="TYPE:NAME",
+        help="load a dataset from a data source instead of a CSV file (e.g. sklearn:iris)",
+    )
     parser.add_argument("--to", choices=formats, help="output format")
     parser.add_argument(
         "-o",
@@ -72,7 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--compression",
-        help="output compression (feather: lz4 [default], zstd, uncompressed)",
+        help=(
+            "output compression (feather: lz4 [default], zstd, uncompressed; "
+            "h5: gzip [default], lzf, uncompressed; csv: none)"
+        ),
     )
     parser.add_argument(
         "--overwrite",
@@ -89,6 +112,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.input and args.source:
+        parser.error("an input CSV file and --source are exclusive")
 
     settings = dict(_DEFAULTS)
     try:
@@ -97,6 +122,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"ia-convert: error: {exc}", file=sys.stderr)
         return 1
+    # An origin given on the command line replaces the one from the configuration.
+    if args.input:
+        settings["source"] = None
+    if args.source:
+        settings["input"] = None
     auto_map = vars(args).pop("auto_map")
     settings.update(
         {k: v for k, v in vars(args).items() if k != "config" and v is not None}
@@ -104,8 +134,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if auto_map is not None:
         settings["auto_mappings"] = [{"strategy": auto_map}]
 
-    if not settings["input"]:
-        parser.error("an input CSV file is required (argument or 'input' in --config)")
+    if not settings["input"] and not settings["source"]:
+        parser.error(
+            "an input CSV file or a data source is required "
+            "(argument, --source, or 'input'/'source' in --config)"
+        )
+    if settings["source"] and not settings["output"]:
+        parser.error(
+            "an output path is required with a data source (-o or 'output' in --config)"
+        )
     if not settings["to"]:
         parser.error("an output format is required (--to or 'to' in --config)")
 
@@ -117,6 +154,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings["input"],
             settings["output"],
             settings["to"],
+            source=settings["source"],
             sep=settings["sep"],
             encoding=settings["encoding"],
             overwrite=settings["overwrite"],

@@ -6,8 +6,9 @@ Explicit command-line arguments always take precedence over the file.
 | Key           | Type   | Default                         | Description                                   |
 |---------------|--------|---------------------------------|-----------------------------------------------|
 | `input`       | string | —                               | Input CSV file (header row required)          |
-| `output`      | string | input path + format extension   | Output file                                   |
-| `to`          | string | —                               | Output format (`feather`)                     |
+| `source`      | mapping | —                              | Data source `{type, name}` instead of `input` (e.g. `{type: sklearn, name: iris}`) |
+| `output`      | string | input path + format extension   | Output file (required with `source`)          |
+| `to`          | string | —                               | Output format (`csv`, `feather`, `h5`)        |
 | `sep`         | string | `,`                             | CSV field separator (single character)        |
 | `encoding`    | string | `utf-8`                         | CSV file encoding (e.g. `latin-1`)            |
 | `columns`     | list of strings | all columns            | Column names to include, in the specified order |
@@ -16,7 +17,7 @@ Explicit command-line arguments always take precedence over the file.
 | `add_id` | bool | `false` | Add a sequential integer `id` column (0-based) at the beginning |
 | `auto_mappings` | list of mappings | — | Automatically encode categorical columns (`ordinal`, `onehot`) |
 | `mapping_report` | string | — | Write a summary of applied mappings (`.md`, `.yaml`, `.yml`, `.json`) |
-| `compression` | string | `lz4`                           | Feather compression: `lz4`, `zstd`, `uncompressed` |
+| `compression` | string | `lz4` (feather), `gzip` (h5)    | Feather: `lz4`, `zstd`, `uncompressed`; h5: `gzip`, `lzf`, `uncompressed`; not supported for csv |
 | `overwrite`   | bool   | `false`                         | Replace an existing output file               |
 
 Unknown keys or values of the wrong type are rejected with an error naming the setting.
@@ -60,6 +61,19 @@ mapping_report: ../data/output/mapping.md
 `mapping_report` lists every manual (`value_mappings`) and automatic mapping with its
 strategy and value-to-code table. The format follows the extension. An existing report is
 only replaced with `overwrite: true`. Relative paths are resolved like `input` and `output`.
+
+## Data sources
+
+`source` loads a named dataset instead of reading a CSV file; `input` and `source` are
+exclusive. The `sklearn` source (install with `poetry install --extras sklearn`) loads the
+scikit-learn toy datasets `iris`, `wine`, `breast_cancer`, `diabetes`, `digits` and
+`linnerud` without network access. Feature columns keep their scikit-learn names, followed by
+a `target` column (or `target_<name>` columns for `linnerud`). The rest of the pipeline
+(`columns`, `value_mappings`, `auto_mappings`, `add_id`, `mapping_report`) applies unchanged;
+`sep`, `encoding` and `trim_whitespace` have no effect. See `conf/sklearn.yaml`.
+
+A CSV file passed on the command line replaces a `source` from the file, and `--source`
+replaces an `input` from the file.
 
 ## Path resolution
 

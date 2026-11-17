@@ -1,7 +1,10 @@
+import sys
 from pathlib import Path
 
+import h5py
 import pyarrow as pa
 import pytest
+import yaml
 from pyarrow import csv, feather
 
 from ia_data_format_converter import (
@@ -9,8 +12,98 @@ from ia_data_format_converter import (
     InvalidOptionError,
     OutputExistsError,
     UnknownFormatError,
+    UnknownSourceError,
     convert,
 )
+
+IRIS = {"type": "sklearn", "name": "iris"}
+
+
+def test_source_to_csv(tmp_path: Path):
+    output = convert(None, tmp_path / "iris.csv", "csv", source=IRIS)
+
+    result = csv.read_csv(output)
+    assert result.num_rows == 150
+    assert result.column_names[-1] == "target"
+    assert len(result.column_names) == 5
+
+
+def test_source_to_feather(tmp_path: Path):
+    output = convert(None, tmp_path / "iris.feather", "feather", source=IRIS)
+    assert feather.read_table(output).num_rows == 150
+
+
+def test_source_to_h5(tmp_path: Path):
+    output = convert(None, tmp_path / "iris.h5", "h5", source=IRIS)
+    with h5py.File(output, "r") as h5:
+        assert len(h5.attrs["columns"]) == 5
+        assert h5["target"].shape == (150,)
+
+
+def test_source_columns(tmp_path: Path):
+    output = convert(
+        None,
+        tmp_path / "iris.feather",
+        "feather",
+        source=IRIS,
+        columns=["petal length (cm)", "target"],
+    )
+    assert feather.read_table(output).column_names == ["petal length (cm)", "target"]
+
+
+def test_source_value_mapping_and_report(tmp_path: Path):
+    report = tmp_path / "report.yaml"
+    species = {0: "setosa", 1: "versicolor", 2: "virginica"}
+
+    output = convert(
+        None,
+        tmp_path / "iris.feather",
+        "feather",
+        source=IRIS,
+        value_mappings={"target": species},
+        mapping_report=report,
+    )
+
+    assert set(feather.read_table(output)["target"].to_pylist()) == set(
+        species.values()
+    )
+    assert yaml.safe_load(report.read_text())["columns"]["target"]["mapping"] == species
+
+
+def test_source_add_id(tmp_path: Path):
+    output = convert(
+        None, tmp_path / "iris.feather", "feather", source=IRIS, add_id=True
+    )
+    table = feather.read_table(output)
+    assert table.column_names[0] == "id"
+    assert table["id"].to_pylist() == list(range(150))
+
+
+def test_source_and_input_are_exclusive(sample_csv: Path, tmp_path: Path):
+    output = tmp_path / "out.csv"
+    with pytest.raises(InvalidOptionError, match="exclusive"):
+        convert(sample_csv, output, "csv", source=IRIS)
+    with pytest.raises(InvalidOptionError, match="exclusive"):
+        convert(None, output, "csv")
+    assert not output.exists()
+
+
+def test_source_requires_output():
+    with pytest.raises(InvalidOptionError, match="output path is required"):
+        convert(None, None, "csv", source=IRIS)
+
+
+def test_unknown_source_type(tmp_path: Path):
+    output = tmp_path / "out.csv"
+    with pytest.raises(UnknownSourceError, match="openml"):
+        convert(None, output, "csv", source={"type": "openml", "name": "iris"})
+    assert not output.exists()
+
+
+def test_csv_works_without_sklearn(monkeypatch, sample_csv: Path, tmp_path: Path):
+    monkeypatch.setitem(sys.modules, "sklearn", None)
+    output = convert(sample_csv, tmp_path / "out.csv", "csv")
+    assert csv.read_csv(output).num_rows == 3
 
 
 def test_convert_csv_to_feather(sample_csv: Path, tmp_path: Path):

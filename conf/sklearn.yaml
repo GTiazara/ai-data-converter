@@ -1,0 +1,20 @@
+# Export a scikit-learn toy dataset with ia-convert (requires the 'sklearn' extra).
+# Relative paths are resolved against the directory of this file (conf/).
+# Datasets: iris, wine, breast_cancer, diabetes, digits, linnerud.
+
+source:
+  type: sklearn
+  name: iris
+to: csv #h5 # csv, feather or h5
+output: ../data/output/iris.csv
+# compression: gzip # h5: gzip, lzf, uncompressed; feather: lz4, zstd, uncompressed; csv: omit
+add_id: true
+overwrite: false
+
+# The whole pipeline applies, e.g. naming the classes:
+# value_mappings:
+#   target:
+#     0: setosa
+#     1: versicolor
+#     2: virginica
+# mapping_report: ../data/output/iris-mapping.md

@@ -96,3 +96,39 @@ def test_invalid_add_id_config(tmp_path: Path):
 
     with pytest.raises(ConfigError, match="add_id"):
         load_config(path)
+
+
+def test_sklearn_config_is_valid():
+    config = load_config(REPO_ROOT / "conf" / "sklearn.yaml")
+    assert config["source"] == {"type": "sklearn", "name": "iris"}
+    assert config["output"] == str(REPO_ROOT / "data" / "output" / "iris.h5")
+
+
+def test_source_config(tmp_path: Path):
+    path = tmp_path / "c.yaml"
+    path.write_text("source: {type: sklearn, name: wine}\n")
+
+    assert load_config(path)["source"] == {"type": "sklearn", "name": "wine"}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "{type: sklearn}",
+        "{type: sklearn, name: iris, extra: 1}",
+        "{type: '', name: iris}",
+        "iris",
+    ],
+)
+def test_invalid_source_config(tmp_path: Path, value: str):
+    path = tmp_path / "c.yaml"
+    path.write_text(f"source: {value}\n")
+    with pytest.raises(ConfigError, match="source"):
+        load_config(path)
+
+
+def test_source_and_input_config_exclusive(tmp_path: Path):
+    path = tmp_path / "c.yaml"
+    path.write_text("input: data.csv\nsource: {type: sklearn, name: iris}\n")
+    with pytest.raises(ConfigError, match="exclusive"):
+        load_config(path)

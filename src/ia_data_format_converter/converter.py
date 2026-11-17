@@ -15,6 +15,7 @@ from ia_data_format_converter.automap import (
 )
 from ia_data_format_converter.errors import InvalidOptionError, OutputExistsError
 from ia_data_format_converter.readers import read_csv
+from ia_data_format_converter.sources import get_source
 from ia_data_format_converter.writers import get_writer
 
 
@@ -24,10 +25,11 @@ def default_output_path(input_path: str | Path, fmt: str) -> Path:
 
 
 def convert(
-    input_path: str | Path,
+    input_path: str | Path | None,
     output_path: str | Path | None,
     fmt: str,
     *,
+    source: Mapping[str, str] | None = None,
     sep: str = ",",
     encoding: str = "utf-8",
     overwrite: bool = False,
@@ -39,14 +41,35 @@ def convert(
     mapping_report: str | Path | None = None,
     **options: Any,
 ) -> Path:
-    """Convert a CSV file to ``fmt`` and return the written output path.
+    """Convert a CSV file or a data source to ``fmt`` and return the written output path.
 
+    Exactly one of ``input_path`` (CSV file) and ``source`` (``{"type": ..., "name": ...}``)
+    must be given; CSV reading options are ignored for a source.
     The output is written atomically: on failure no partial file is left behind.
     When ``mapping_report`` is set, the applied mappings are summarised in that file
     (``.md``, ``.yaml``/``.yml`` or ``.json``).
     """
     writer = get_writer(fmt)
     options = writer.validate_options(**options)
+    if (input_path is None) == (source is None):
+        raise InvalidOptionError(
+            "Exactly one of an input file and a data source is required (they are exclusive)"
+        )
+    data_source = None
+    if source is not None:
+        if (
+            not isinstance(source, Mapping)
+            or set(source) != {"type", "name"}
+            or not all(isinstance(value, str) and value for value in source.values())
+        ):
+            raise InvalidOptionError(
+                "Source must be a mapping with non-empty 'type' and 'name' strings"
+            )
+        data_source = get_source(source["type"])
+        if output_path is None:
+            raise InvalidOptionError(
+                "An output path is required when converting a data source"
+            )
     output = (
         Path(output_path)
         if output_path is not None
@@ -65,9 +88,12 @@ def convert(
             )
     report: dict[str, dict[str, Any]] = {}
 
-    table = read_csv(
-        input_path, sep=sep, encoding=encoding, trim_whitespace=trim_whitespace
-    )
+    if data_source is not None:
+        table = data_source.load(source["name"])
+    else:
+        table = read_csv(
+            input_path, sep=sep, encoding=encoding, trim_whitespace=trim_whitespace
+        )
 
     if columns is not None:
         if (

@@ -6,7 +6,9 @@ from typing import Any, Protocol
 import pyarrow as pa
 
 from ia_data_format_converter.errors import UnknownFormatError
+from ia_data_format_converter.writers.csv import CsvWriter
 from ia_data_format_converter.writers.feather import FeatherWriter
+from ia_data_format_converter.writers.h5 import H5Writer
 
 
 class Writer(Protocol):
@@ -20,7 +22,9 @@ class Writer(Protocol):
     def write(self, table: pa.Table, path: Path, **options: Any) -> None: ...
 
 
-_REGISTRY: dict[str, Writer] = {writer.name: writer for writer in (FeatherWriter(),)}
+_REGISTRY: dict[str, Writer] = {
+    writer.name: writer for writer in (CsvWriter(), FeatherWriter(), H5Writer())
+}
 
 
 def available_formats() -> list[str]:
